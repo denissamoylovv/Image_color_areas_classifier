@@ -25,7 +25,7 @@ def get_quantity_of_each_color(image):
 
 
 
-img=import_image('_files/3.png')
+img=import_image('___files/3.png')
 
 img=img@np.array((0.2126,0.7152,0.0722))
 img=img.round().astype(int)

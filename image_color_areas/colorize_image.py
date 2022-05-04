@@ -1,11 +1,7 @@
 # import modules
-from email.mime import image
-import logging
-from logging import log
 import numpy as np
 import PIL.Image
 
-logging.basicConfig(level=logging.INFO)
 
 def import_image(image_path):
 	img = PIL.Image.open(image_path)
@@ -68,13 +64,19 @@ def export_image(img,image_path):
 	img=PIL.Image.fromarray(img,mode='RGBA')
 	img.save(image_path)
 
-grades=6
 palet=[[255,0,0],[0,255,0],[0,0,255],[255,255,0],[0,255,255],[255,0,255],[127,0,255],[255,127,0],[255,255,127],[0,255,127],[127,255,0],[0,127,255],[127,0,0],[0,127,0],[0,0,127],[127,127,0],[0,127,127],[127,0,127],[127,127,127]]
-fast=0
+
 
 def main():
-
 	img=import_image('___files/img1.png')
+	colored_img=create_colored_image(img,grades=6,fast=False,palet=palet)
+	export_image(colored_img,'___files/img1_colored.png')
+
+
+def create_colored_image(image,grades,fast=False,palet=palet):
+
+	img=image
+
 	img_lum=rgb_to_luminance(img,grades=grades)
 
 	colors=get_quantity_of_each_color(img_lum)
@@ -91,12 +93,12 @@ def main():
 
 	
 
-	img_layer=paint_image(img, img_lum, colors)
+	img_layer=paint_image(img, img_lum, colors,palet)
 
 	if fast==0:
 		img_layer=replace_rare_colors_by_closest(img_lum, colors, img_layer)
 
-	export_image(img_layer,'___files/img1_layer.png')
+	return img_layer
 
 
 def replace_rare_colors_by_closest(img_lum, colors, img_layer):
@@ -148,7 +150,7 @@ def replace_rare_colors_by_closest(img_lum, colors, img_layer):
 	return img_layer
 
 
-def paint_image(img, img_lum, colors):
+def paint_image(img, img_lum, colors,palet):
 	img_layer=np.zeros((img.shape[0],img.shape[1],4),dtype=np.uint8)
 
 	for i,row in enumerate(img_lum):

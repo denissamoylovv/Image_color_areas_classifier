@@ -1,0 +1,11 @@
+div#input_image{
+	background-repeat: no-repeat;
+}
+
+.form-control-range{
+	width: 100%;
+}
+
+img{
+	vertical-align: top;
+}

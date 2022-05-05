@@ -107,15 +107,15 @@ def main():
 
 
 
-def colorize_image_to_base64(image_str:str,grades:int,fast=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025) -> str:
+def colorize_image_to_base64(image_str:str,grades:int,fast=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025,opacity:float=1) -> str:
 	img=import_image_base64(image_str)
-	img=create_colored_image(img,grades=grades,fast=fast,palet=palet,threshold=threshold,contrast=contrast,noise_level=noise_level,noise_mag=noise_mag)
+	img=create_colored_image(img,grades=grades,fast=fast,palet=palet,threshold=threshold,contrast=contrast,noise_level=noise_level,noise_mag=noise_mag,opacity=opacity)
 	return image_to_base64(img)
 
 
 
 
-def create_colored_image(image:np.ndarray,grades:int,fast=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025) -> np.ndarray:
+def create_colored_image(image:np.ndarray,grades:int,fast=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025,opacity:float=1) -> np.ndarray:
 
 	img=image
 	img=image_preprocessing(img,threshold=threshold,contrast=contrast,noise_level=noise_level,noise_mag=noise_mag)
@@ -137,7 +137,7 @@ def create_colored_image(image:np.ndarray,grades:int,fast=False,palet=palet, thr
 
 	
 
-	img_layer=paint_image(img, img_lum, colors,palet)
+	img_layer=paint_image(img, img_lum, colors,palet,opacity=opacity)
 
 	if fast==0:
 		img_layer=replace_rare_colors_by_closest(img_lum, colors, img_layer)
@@ -196,15 +196,15 @@ def replace_rare_colors_by_closest(img_lum:np.ndarray, colors:np.ndarray, img_la
 	return img_layer
 
 
-def paint_image(img:np.ndarray, img_lum:np.ndarray, colors:np.ndarray,palet:list[list[int]]) -> np.ndarray:
+def paint_image(img:np.ndarray, img_lum:np.ndarray, colors:np.ndarray,palet:list[list[int]],opacity:float=1) -> np.ndarray:
 	img_layer=np.zeros((img.shape[0],img.shape[1],4),dtype=np.uint8)
 
 	for i,row in enumerate(img_lum):
 		for j,pix in enumerate(row):
 			if colors[pix]!=0:
-				img_layer[i,j]=palet[pix]+[255]
+				img_layer[i,j]=palet[pix]+[int(255*opacity)]
 			else:
-				img_layer[i,j]=[255,255,255,255]
+				img_layer[i,j]=[255,255,255,int(255*opacity)]
 	
 	return img_layer
 	

@@ -1,24 +1,54 @@
 # import modules
 import numpy as np
 import PIL.Image
+import base64
+import io
 
 
-def import_image(image_path):
-	img = PIL.Image.open(image_path)
-	img = np.array(img)
-	if img.shape[2]==3:
-		img=np.append(img,np.ones((img.shape[0],img.shape[1],1),dtype=np.uint8)*255,axis=2)
-	
-	img=add_noise(img,noise_level=0.2,noise_mag=0.025)
-	img=contrast_image(img,contrast=1.3,threshold=25)
+# with open('___files/img_input.png','rb') as f:
+# 	print(base64.b64encode(f.read()).decode('utf-8'))
 
-	
-	export_image(img,image_path+'_noise.png')
 
+
+# convert numpy array image to base64 string
+def image_to_base64(img:np.ndarray) -> str:
+
+
+	image=PIL.Image.fromarray(img,mode='RGBA')
+
+	b = io.BytesIO()
+	image.save(b, 'png')
+	img_bytes = b.getvalue()
+	img_str=base64.b64encode(img_bytes).decode('utf-8')
+	return img_str
+
+
+def import_image_base64(img_base64_str:str) -> np.ndarray:
+	img_base64_str=img_base64_str[22:]+'===='
+	img_bytes=base64.b64decode(img_base64_str)
+	img=import_image(io.BytesIO(img_bytes))
 	return img
 
 
-def add_noise(img,noise_level=0.1,noise_mag=0.1):
+def import_image(image:str|io.BytesIO) -> np.ndarray:
+	img = PIL.Image.open(image)
+	
+	img = np.array(img)
+	if img.shape[2]==3:
+		img=np.append(img,np.ones((img.shape[0],img.shape[1],1),dtype=np.uint8)*255,axis=2)
+
+	
+	# export_image(img,image_path+'_noise.png')
+
+	return img
+
+def image_preprocessing(img:np.ndarray,threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025) -> np.ndarray:
+	img=add_noise(img,noise_level=noise_level,noise_mag=noise_mag)
+	img=contrast_image(img,contrast=contrast,threshold=threshold)
+	return img
+
+
+def add_noise(img:np.ndarray,noise_level=0.1,noise_mag=0.1)->np.ndarray:
 	for i,row in enumerate(img):
 		for j,pix in enumerate(row):
 			if np.random.random()<noise_level:
@@ -26,7 +56,7 @@ def add_noise(img,noise_level=0.1,noise_mag=0.1):
 	return img
 
 
-def contrast_image(img,contrast=1.0,threshold=5):
+def contrast_image(img:np.ndarray,contrast=1.0,threshold=5) -> np.ndarray:
 	img=img.astype(np.float32)
 	img=img-128
 	img=img*(contrast,contrast,contrast,1)
@@ -38,7 +68,7 @@ def contrast_image(img,contrast=1.0,threshold=5):
 	return img
 
 
-def additional_borderline_contrast(img,threshold=5):
+def additional_borderline_contrast(img:np.ndarray,threshold=5) -> np.ndarray:
 	img=np.where(img<threshold,0,img)
 	img=np.where(img>255-threshold,255,img)
 
@@ -47,12 +77,12 @@ def additional_borderline_contrast(img,threshold=5):
 
 
 
-def get_quantity_of_each_color(image):
+def get_quantity_of_each_color(image:np.ndarray) -> np.ndarray:
 	quantity_of_each_color = np.bincount(image.flatten())
 	return quantity_of_each_color
 
 
-def rgb_to_luminance(img,grades=256):
+def rgb_to_luminance(img:np.ndarray,grades=256) -> np.ndarray:
 
 	lum=(img@np.array((1,1,1,0)))/3
 	lum=lum*(grades-1)/256
@@ -60,11 +90,13 @@ def rgb_to_luminance(img,grades=256):
 	# lum=(lum.round()*(256/(grades-1))).round()
 	return lum.astype(np.uint8)
 
-def export_image(img,image_path):
-	img=PIL.Image.fromarray(img,mode='RGBA')
-	img.save(image_path)
+def export_image(img:np.ndarray,image_path:str) -> None:
+	image=PIL.Image.fromarray(img,mode='RGBA')
+	image.save(image_path)
 
 palet=[[255,0,0],[0,255,0],[0,0,255],[255,255,0],[0,255,255],[255,0,255],[127,0,255],[255,127,0],[255,255,127],[0,255,127],[127,255,0],[0,127,255],[127,0,0],[0,127,0],[0,0,127],[127,127,0],[0,127,127],[127,0,127],[127,127,127]]
+
+
 
 
 def main():
@@ -73,9 +105,21 @@ def main():
 	export_image(colored_img,'___files/img1_colored.png')
 
 
-def create_colored_image(image,grades,fast=False,palet=palet):
+
+
+def colorize_image_to_base64(image_str:str,grades:int,fast=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025) -> str:
+	img=import_image_base64(image_str)
+	img=create_colored_image(img,grades=grades,fast=fast,palet=palet,threshold=threshold,contrast=contrast,noise_level=noise_level,noise_mag=noise_mag)
+	return image_to_base64(img)
+
+
+
+
+def create_colored_image(image:np.ndarray,grades:int,fast=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025) -> np.ndarray:
 
 	img=image
+	img=image_preprocessing(img,threshold=threshold,contrast=contrast,noise_level=noise_level,noise_mag=noise_mag)
+
 
 	img_lum=rgb_to_luminance(img,grades=grades)
 
@@ -101,7 +145,9 @@ def create_colored_image(image,grades,fast=False,palet=palet):
 	return img_layer
 
 
-def replace_rare_colors_by_closest(img_lum, colors, img_layer):
+def replace_rare_colors_by_closest(img_lum:np.ndarray, colors:np.ndarray, img_layer:np.ndarray) -> np.ndarray:
+	# it is not closest, we search moving by square spiral, but algorithm is much easier
+
 	for i,row in enumerate(img_lum):
 		for j,pix in enumerate(row):			
 			if colors[pix]==0:
@@ -150,7 +196,7 @@ def replace_rare_colors_by_closest(img_lum, colors, img_layer):
 	return img_layer
 
 
-def paint_image(img, img_lum, colors,palet):
+def paint_image(img:np.ndarray, img_lum:np.ndarray, colors:np.ndarray,palet:list[list[int]]) -> np.ndarray:
 	img_layer=np.zeros((img.shape[0],img.shape[1],4),dtype=np.uint8)
 
 	for i,row in enumerate(img_lum):

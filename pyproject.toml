@@ -8,6 +8,9 @@ authors = ["Your Name <you@example.com>"]
 python = "^3.10"
 numpy = "^1.22.3"
 Pillow = "^9.1.0"
+Flask = "^2.1.2"
+Flask-WTF = "^1.0.1"
+requests = "^2.27.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

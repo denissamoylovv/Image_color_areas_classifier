@@ -1,5 +1,4 @@
 # import modules
-from tkinter.messagebox import NO
 import numpy as np
 import PIL.Image
 import base64

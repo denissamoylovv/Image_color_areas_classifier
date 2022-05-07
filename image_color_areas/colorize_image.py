@@ -1,4 +1,5 @@
 # import modules
+from tkinter.messagebox import NO
 import numpy as np
 import PIL.Image
 import base64
@@ -43,8 +44,9 @@ def import_image(image:str|io.BytesIO) -> np.ndarray:
 	return img
 
 def image_preprocessing(img:np.ndarray,threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025) -> np.ndarray:
-	img=add_noise(img,noise_level=noise_level,noise_mag=noise_mag)
 	img=contrast_image(img,contrast=contrast,threshold=threshold)
+	img=add_noise(img,noise_level=noise_level,noise_mag=noise_mag)
+	img=compressor(img)
 	return img
 
 
@@ -74,6 +76,14 @@ def additional_borderline_contrast(img:np.ndarray,threshold=5) -> np.ndarray:
 
 	return img
 
+def compressor(img:np.ndarray) -> np.ndarray:
+	img=img.astype(np.float32)
+	img=img-(np.min(img)+np.max(img))/2
+	img=img/np.max(img)*127+127
+	img=img.round()
+	img=img.astype(np.uint8)
+	return img
+
 
 
 
@@ -82,10 +92,11 @@ def get_quantity_of_each_color(image:np.ndarray) -> np.ndarray:
 	return quantity_of_each_color
 
 
-def rgb_to_luminance(img:np.ndarray,grades=256) -> np.ndarray:
+def rgb_to_luminance(img:np.ndarray,grades=256,clip:bool=False) -> np.ndarray:
 
 	lum=(img@np.array((1,1,1,0)))/3
-	lum=lum*(grades-1)/256
+	if clip:
+		lum=lum*(grades-1)/256
 	lum=lum.round()
 	# lum=(lum.round()*(256/(grades-1))).round()
 	return lum.astype(np.uint8)
@@ -101,45 +112,98 @@ palet=[[255,0,0],[0,255,0],[0,0,255],[255,255,0],[0,255,255],[255,0,255],[127,0,
 
 def main():
 	img=import_image('___files/img1.png')
-	colored_img=create_colored_image(img,grades=6,fast=False,palet=palet)
+	colored_img=create_colored_image(img,grades=4,kmean=True,palet=palet, threshold=5,contrast=1.0,noise_level=0.2,noise_mag=0.025,opacity=1)
 	export_image(colored_img,'___files/img1_colored.png')
 
 
 
 
-def colorize_image_to_base64(image_str:str,grades:int,fast=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025,opacity:float=1) -> str:
+def colorize_image_to_base64(image_str:str,grades:int,kmean=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025,opacity:float=1) -> str:
 	img=import_image_base64(image_str)
-	img=create_colored_image(img,grades=grades,fast=fast,palet=palet,threshold=threshold,contrast=contrast,noise_level=noise_level,noise_mag=noise_mag,opacity=opacity)
+	img=create_colored_image(img,grades=grades,kmean=kmean,palet=palet,threshold=threshold,contrast=contrast,noise_level=noise_level,noise_mag=noise_mag,opacity=opacity)
 	return image_to_base64(img)
 
 
 
+def k_means_for_colors(colors:np.ndarray,k:int=3) -> dict[int,int]:
+	l=256/k/2
+	centers=[(1+2*i)*l for i in range(k)]
+	belonging:dict[int,int]={i:int((i)//(2*l)) for i,color in enumerate(colors)}
 
-def create_colored_image(image:np.ndarray,grades:int,fast=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025,opacity:float=1) -> np.ndarray:
+	old_belonging=belonging.copy()
+	too_long=0
+	while True:
+		for affinity in set(belonging.values()):
+			M=0
+			c=0
+			for i in belonging:
+				if belonging[i]==affinity:
+					M+=colors[i]
+					c+=colors[i]*i
+					
+			
+			if M==0:
+				continue
+			centers[affinity]=c/M
+
+		for color in range(len(colors)):
+			belonging[color]=centers.index(round_to_nearest(color,centers))
+
+		if old_belonging==belonging:
+			break
+		old_belonging=belonging.copy()
+
+		if too_long >100:
+			break
+		too_long+=1
+	
+	return belonging
+
+
+def round_to_nearest(n:int,targets:list) -> int:
+	return min(targets, key=lambda x:abs(x-n))
+
+
+
+def paint_image_kmean(img_lum:np.ndarray,colors:dict[int,int],palet:list[list[int]],opacity:float=1) -> np.ndarray:
+	img_layer=np.zeros((img_lum.shape[0],img_lum.shape[1],4),dtype=np.uint8)
+
+	for i,row in enumerate(img_lum):
+		for j,pix in enumerate(row):
+			img_layer[i,j]=palet[colors[pix]]+[int(255*opacity)]
+
+	return img_layer
+
+
+def create_colored_image(image:np.ndarray,grades:int,kmean=False,palet=palet, threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025,opacity:float=1) -> np.ndarray:
 
 	img=image
 	img=image_preprocessing(img,threshold=threshold,contrast=contrast,noise_level=noise_level,noise_mag=noise_mag)
 
 
-	img_lum=rgb_to_luminance(img,grades=grades)
+	img_lum=rgb_to_luminance(img,grades=grades,clip=False)
 
 	colors=get_quantity_of_each_color(img_lum)
 
-	colors_temp=colors.flatten()
-	colors_temp.sort()
-	n_max=colors_temp[-round(grades/4)]
-	for i in range(colors.size):
-		if colors[i]<n_max/4:
-			colors[i]=0
-	
+	if kmean:
+		colors=k_means_for_colors(colors,k=grades)
+		img_layer=paint_image_kmean(img_lum,colors,palet,opacity=opacity)
 
-	# quantity_of_colors=np.count_nonzero(colors)
 
-	
+	else:
+		colors=get_quantity_of_each_color(img_lum)
+		colors_temp=colors.flatten()
+		colors_temp.sort()
 
-	img_layer=paint_image(img, img_lum, colors,palet,opacity=opacity)
+		n_max=colors_temp[-round(grades/4)]
+		for i in range(colors.size):
+			if colors[i]<n_max/4:
+				colors[i]=0
+		
 
-	if fast==0:
+		
+
+		img_layer=paint_image(img_lum, colors,palet,opacity=opacity)
 		img_layer=replace_rare_colors_by_closest(img_lum, colors, img_layer)
 
 	return img_layer
@@ -196,8 +260,8 @@ def replace_rare_colors_by_closest(img_lum:np.ndarray, colors:np.ndarray, img_la
 	return img_layer
 
 
-def paint_image(img:np.ndarray, img_lum:np.ndarray, colors:np.ndarray,palet:list[list[int]],opacity:float=1) -> np.ndarray:
-	img_layer=np.zeros((img.shape[0],img.shape[1],4),dtype=np.uint8)
+def paint_image(img_lum:np.ndarray, colors:np.ndarray,palet:list[list[int]],opacity:float=1) -> np.ndarray:
+	img_layer=np.zeros((img_lum.shape[0],img_lum.shape[1],4),dtype=np.uint8)
 
 	for i,row in enumerate(img_lum):
 		for j,pix in enumerate(row):

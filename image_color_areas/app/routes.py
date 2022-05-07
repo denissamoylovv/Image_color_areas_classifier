@@ -5,7 +5,7 @@ from image_color_areas.colorize_image import colorize_image_to_base64
 @app.route('/', methods=['GET', 'POST'])
 def index():
 	if request.method == 'POST':
-		image_and_variables={key: float(request.form[key]) if key != "image_str" else request.form[key] for key in request.form}
+		image_and_variables={key: float(request.form[key]) if key != "image_str" and key != "kmean" else request.form[key] for key in request.form}
 		image_and_variables['grades']=int(image_and_variables['grades'])
 
 		image_and_variables['image_str']=image_and_variables['image_str'].replace(" ","+")

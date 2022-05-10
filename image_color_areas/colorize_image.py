@@ -19,15 +19,13 @@ def image_to_base64(img:np.ndarray) -> str:
 	b = io.BytesIO()
 	image.save(b, 'png')
 	img_bytes = b.getvalue()
-	img_str=base64.b64encode(img_bytes).decode('utf-8')
-	return img_str
+	return base64.b64encode(img_bytes).decode('utf-8')
 
 
 def import_image_base64(img_base64_str:str) -> np.ndarray:
-	img_base64_str=img_base64_str[22:]+'===='
+	img_base64_str = f'{img_base64_str[22:]}===='
 	img_bytes=base64.b64decode(img_base64_str)
-	img=import_image(io.BytesIO(img_bytes))
-	return img
+	return import_image(io.BytesIO(img_bytes))
 
 
 def import_image(image:str|io.BytesIO) -> np.ndarray:
@@ -87,8 +85,7 @@ def compressor(img:np.ndarray) -> np.ndarray:
 
 
 def get_quantity_of_each_color(image:np.ndarray) -> np.ndarray:
-	quantity_of_each_color = np.bincount(image.flatten())
-	return quantity_of_each_color
+	return np.bincount(image.flatten())
 
 
 def rgb_to_luminance(img:np.ndarray,grades=256,clip:bool=False) -> np.ndarray:

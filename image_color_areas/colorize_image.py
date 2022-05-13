@@ -1,4 +1,5 @@
 # import modules
+from locale import normalize
 import numpy as np
 import PIL.Image
 import base64
@@ -40,9 +41,10 @@ def import_image(image:str|io.BytesIO) -> np.ndarray:
 
 	return img
 
-def image_preprocessing(img:np.ndarray,threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025) -> np.ndarray:
+def image_preprocessing(img:np.ndarray,threshold:int=5,contrast:float = 1.0,noise_level:float=0.2,noise_mag:float=0.025,radius:int=1,sigma:float=1) -> np.ndarray:
 	img=contrast_image(img,contrast=contrast,threshold=threshold)
-	img=add_noise(img,noise_level=noise_level,noise_mag=noise_mag)
+	img=gaussian_blur(img,kernel_size=2*radius+1,sigma=sigma)
+	# img=add_noise(img,noise_level=noise_level,noise_mag=noise_mag)
 	img=compressor(img)
 	return img
 
@@ -104,12 +106,27 @@ def export_image(img:np.ndarray,image_path:str) -> None:
 palet=[[255,0,0],[0,255,0],[0,0,255],[255,255,0],[0,255,255],[255,0,255],[127,0,255],[255,127,0],[255,255,127],[0,255,127],[127,255,0],[0,127,255],[127,0,0],[0,127,0],[0,0,127],[127,127,0],[0,127,127],[127,0,127],[127,127,127]]
 
 
+def image_from_grayscale_to_RGBA(img:np.ndarray) -> np.ndarray:
+	img_4=np.zeros((img.shape[0],img.shape[1],4),dtype=np.uint8)
+	img_4[:,:,0]=img
+	img_4[:,:,1]=img
+	img_4[:,:,2]=img
+	img_4[:,:,3]=255
+	return img_4
 
 
 def main():
 	img=import_image('___files/img1.png')
-	colored_img=create_colored_image(img,grades=4,kmean=True,palet=palet, threshold=5,contrast=1.0,noise_level=0.2,noise_mag=0.025,opacity=1)
-	export_image(colored_img,'___files/img1_colored.png')
+	# img=import_image('___files/3.png')
+	# img=image_preprocessing(img,threshold=5,contrast=1.0,noise_level=0.2,noise_mag=0.025)
+	img=rgb_to_luminance(img,grades=256)
+	img=gaussian_blur(img,kernel_size=5,sigma=0.5,normalize=True)
+	img=image_from_grayscale_to_RGBA(img)
+	export_image(img,'___files/img1_blur.png')
+
+
+	# colored_img=create_colored_image(img,grades=4,kmean=True,palet=palet, threshold=5,contrast=1.0,noise_level=0.2,noise_mag=0.025,opacity=1)
+	# export_image(colored_img,'___files/img1_colored.png')
 
 
 
@@ -181,28 +198,28 @@ def create_colored_image(image:np.ndarray,grades:int,kmean=False,palet=palet, th
 
 	colors=get_quantity_of_each_color(img_lum)
 
-	if kmean:
-		colors=k_means_for_colors(colors,k=grades)
-		img_layer=paint_image_kmean(img_lum,colors,palet,opacity=opacity)
+	if not kmean:
+		return colors_simplifier_depricated(img_lum, grades, palet, opacity)
+
+	colors=k_means_for_colors(colors,k=grades)
+	return paint_image_kmean(img_lum,colors,palet,opacity=opacity)
 
 
-	else:
-		colors=get_quantity_of_each_color(img_lum)
-		colors_temp=colors.flatten()
-		colors_temp.sort()
+def colors_simplifier_depricated(img_lum, grades, palet, opacity):
+	colors=get_quantity_of_each_color(img_lum)
+	colors_temp=colors.flatten()
+	colors_temp.sort()
 
-		n_max=colors_temp[-round(grades/4)]
-		for i in range(colors.size):
-			if colors[i]<n_max/4:
-				colors[i]=0
-		
+	n_max=colors_temp[-round(grades/4)]
+	for i in range(colors.size):
+		if colors[i]<n_max/4:
+			colors[i]=0
 
-		
 
-		img_layer=paint_image(img_lum, colors,palet,opacity=opacity)
-		img_layer=replace_rare_colors_by_closest(img_lum, colors, img_layer)
+	result = paint_image(img_lum, colors,palet,opacity=opacity)
+	result = replace_rare_colors_by_closest(img_lum, colors, result)
 
-	return img_layer
+	return result
 
 
 def replace_rare_colors_by_closest(img_lum:np.ndarray, colors:np.ndarray, img_layer:np.ndarray) -> np.ndarray:
@@ -254,6 +271,54 @@ def replace_rare_colors_by_closest(img_lum:np.ndarray, colors:np.ndarray, img_la
 							l-=1
 					n+=1
 	return img_layer
+
+
+def gaussian(x:float, mu:float, sigma:float) -> float:
+	return np.exp(-((x-mu)**2)/(2*sigma**2))
+
+def gaussian_kernel(size:int, sigma:float,normalize:bool) -> np.ndarray:
+	kernel = np.zeros(size)
+	for i in range(size):
+		kernel[i] = gaussian(i, size//2, sigma)
+
+	if normalize:
+		kernel = kernel/np.sum(kernel)
+	return kernel
+
+
+def expand_matrix(matrix:np.ndarray, size:int) -> np.ndarray:
+	return np.pad(matrix, size, mode="edge")
+
+
+def gaussian_blur(img:np.ndarray,kernel_size:int=3,sigma:float=1,normalize:bool=True) -> np.ndarray:
+	
+	kernel=gaussian_kernel(kernel_size,sigma,normalize=normalize)
+
+	expand_px=kernel_size//2
+	img=expand_matrix(img,expand_px)
+	img_blur_h=np.zeros(img.shape)
+	img_blur_v=np.zeros(img.shape)
+
+
+	for i in range(img.shape[0]):
+		for j in range(img.shape[1]):
+			if j<=kernel_size/2 or j>=img.shape[1]-kernel_size/2:
+				img_blur_h[i,j]=img[i,j]
+			else:
+				img_blur_h[i,j]=np.sum(kernel*img[i,j-kernel_size//2:j+kernel_size//2+1])
+
+
+	for j in range(img.shape[1]):
+		for i in range(img.shape[0]):
+			if i<=kernel_size/2 or i>=img.shape[0]-kernel_size/2:
+				img_blur_v[i,j]=img_blur_h[i,j]
+			else:
+				img_blur_v[i,j]=np.sum(kernel*img_blur_h[i-kernel_size//2:i+kernel_size//2+1,j])
+
+	img_blur=img_blur_v
+	return img_blur[expand_px:-expand_px,expand_px:-expand_px]
+
+
 
 
 def paint_image(img_lum:np.ndarray, colors:np.ndarray,palet:list[list[int]],opacity:float=1) -> np.ndarray:
